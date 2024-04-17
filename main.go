@@ -91,6 +91,7 @@ func main() {
 		oauth2.Request("POST", "/newAnswer", []string{"read:supervisor"}),
 		oauth2.Request("GET", "/getQuestions", []string{"read:supervisor", "read:student"}),
 		oauth2.Request("GET", "/getApplications", []string{"read:supervisor", "read:student"}),
+		oauth2.Request("GET", "/GetAllAcceptedRequests", []string{"read:supervisor", "read:student"}),
 		oauth2.Request("GET", "/getApplicationsForStudent", []string{"read:student"}),
 		oauth2.Request("GET", "/getSpecificApplications", []string{"read:supervisor", "read:student"}),
 		oauth2.Request("GET", "/getGanttItem/:id", []string{"read:supervisor", "read:student"}),
@@ -128,6 +129,7 @@ func main() {
 	//app.Get("/isSupervisor", controller.GetSupervisorHandler)
 	app.Get("/getApplications", controller.GetApplicationsHandler)                     //retrieves all applications from db
 	app.Get("/getApplicationsForStudent", controller.GetApplicationsForStudentHandler) //retrieves all applications from db
+	app.Get("/GetAllAcceptedRequests", controller.GetAllAcceptedRequestsHandler)       //retrieves all applications from db
 	app.Get("/getSpecificApplications/:id", controller.GetSpecificApplicationsHandler) //retrieves one specific applications
 	app.Get("/getGanttItem/:id", controller.GetGanttItem)
 	app.Get("/getGantt/:id", controller.GetGantt)
@@ -142,7 +144,7 @@ func main() {
 	app.Post("/createProject", controller.CreateProjectHandler)         //post createproject
 	app.Post("/createApplication", controller.CreateApplicationHandler) //post createapplication
 	app.Post("/createSupervisorUser", controller.CreateSupervisorHandler)
-	app.Patch("/acceptApplication", controller.AcceptApplicationHandler)   //patch acceptapplication
+	//patch acceptapplication
 	app.Patch("/declineApplication", controller.DeclineApplicationHandler) //patch declineapplication
 	app.Patch("/completeGanttItem", controller.CompleteGanttItemHandler)
 	app.Post("/createGanttItem", controller.CreateGanttItemHandler) //creates Gantt item in db

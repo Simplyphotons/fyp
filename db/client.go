@@ -235,21 +235,67 @@ WHERE supervisor_id = $1`
 		if err != nil {
 			log.Printf("cannot read data while getting questions: %v", err)
 		}
-
-		result = append(result, model.ApplicationData{
-			ID:           id,
-			StudentID:    studentID,
-			StudentName:  studentName,
-			SupervisorID: supervisorID,
-			Heading:      heading,
-			Description:  description,
-			Accepted:     accepted,
-			Declined:     declined,
-		})
+		if !accepted {
+			result = append(result, model.ApplicationData{
+				ID:           id,
+				StudentID:    studentID,
+				StudentName:  studentName,
+				SupervisorID: supervisorID,
+				Heading:      heading,
+				Description:  description,
+				Accepted:     accepted,
+				Declined:     declined,
+			})
+		}
 	}
 	return result, nil
 
 }
+
+func (db Client) GetAllAcceptedRequests(ctx context.Context) ([]model.ApplicationData, error) {
+	query := `SELECT a.id, a.student_id, u.name, a.supervisor_id, a.heading, a.description, a.accepted, a.declined
+FROM applications a INNER JOIN users u
+    ON a.student_id = u.id
+WHERE a.accepted = true`
+	rows, err := db.conn.QueryContext(ctx, query)
+	if err != nil {
+		log.Printf("cannot execute query to get applications: %v", err)
+		return nil, err
+	}
+
+	result := []model.ApplicationData{}
+	var (
+		id           string
+		studentID    string
+		studentName  string
+		supervisorID string
+		heading      string
+		description  string
+		accepted     bool
+		declined     bool
+	)
+	for rows.Next() {
+		err = rows.Scan(&id, &studentID, &studentName, &supervisorID, &heading, &description, &accepted, &declined)
+		if err != nil {
+			log.Printf("cannot read data while getting reading prompts: %v", err)
+		}
+		if accepted {
+			result = append(result, model.ApplicationData{
+				ID:           id,
+				StudentID:    studentID,
+				StudentName:  studentName,
+				SupervisorID: supervisorID,
+				Heading:      heading,
+				Description:  description,
+				Accepted:     accepted,
+				Declined:     declined,
+			})
+		}
+	}
+	return result, nil
+
+}
+
 func (db Client) GetApplicationsForStudent(ctx context.Context, student_ID string) ([]model.ApplicationData, error) {
 	query := `SELECT a.id, a.student_id, u.name, a.supervisor_id, a.heading, a.description, a.accepted, a.declined
 FROM applications a INNER JOIN users u
@@ -457,7 +503,8 @@ func (db Client) CreateProject(ctx context.Context, application Application, sup
 	rowsAffected, _ := result.RowsAffected()
 	log.Printf("created %d row.\n", rowsAffected)
 	db.updateUser(studentID)
-	db.deleteApplication(application.ID)
+	db.acceptApplication(application.ID)
+	db.deleteApplication(studentID)
 	return nil
 
 }
@@ -518,18 +565,20 @@ func (db Client) CreateApplication(ctx context.Context, application Application,
 	return nil
 }
 
-func (db Client) AcceptApplication(ctx context.Context, application Application) error {
+func (db Client) acceptApplication(id string) error {
+	println(id)
+	println("call succ")
+	updateQuery := "UPDATE applications SET accepted = $1 WHERE id = $2"
 
-	updateQuery := "UPDATE tickets SET accepted = $1 WHERE id = $2"
-
-	result, err := db.conn.Exec(updateQuery, true, application.ID)
+	result, err := db.conn.Exec(updateQuery, true, id)
 	if err != nil {
 		log.Printf("failed to accept application")
 		return err
 	}
 
 	rowsAffected, _ := result.RowsAffected()
-	log.Printf("created %d row.\n", rowsAffected)
+	log.Printf("updated %d row.\n", rowsAffected)
+
 	return nil
 }
 
@@ -550,14 +599,28 @@ func (db Client) CompleteGanttItem(ctx context.Context, gantt Gantt) error {
 }
 
 func (db Client) DeclineApplication(ctx context.Context, application Application) error {
-	db.deleteApplication(application.ID)
+	db.deleteSpecificApplication(application.ID)
 	return nil
 }
 
 func (db Client) deleteApplication(condition string) error {
-	query := "DELETE FROM applications WHERE id = $1"
+	query := "DELETE FROM applications WHERE student_id = $1 AND accepted = $2"
 
-	result, err := db.conn.Exec(query, condition)
+	result, err := db.conn.Exec(query, condition, false)
+	if err != nil {
+		log.Printf("failed to delete table")
+		return err
+	}
+	rowsAffected, _ := result.RowsAffected()
+	log.Printf("Row %d deleted.\n", condition)
+	log.Printf("%d Rows affected.\n", rowsAffected)
+	return nil
+}
+
+func (db Client) deleteSpecificApplication(condition string) error {
+	query := "DELETE FROM applications WHERE id = $1 AND accepted = $2"
+
+	result, err := db.conn.Exec(query, condition, false)
 	if err != nil {
 		log.Printf("failed to delete table")
 		return err
@@ -684,7 +747,9 @@ func (db Client) updateUser(student_id string) error {
 	}
 	rowsAffected, _ := result.RowsAffected()
 	log.Printf("created %d row.\n", rowsAffected)
+
 	return nil
+
 }
 
 func GenerateUUID() string {

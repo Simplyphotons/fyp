@@ -1,0 +1,84 @@
+name: Go-CI
+
+on:
+  push:
+    branches: [ "master" ]
+    paths:
+      - auth0/**/*
+      - db/**/*
+      - handlers/**/*
+      - model/**/*
+      - oauth2/**/*
+      - security/**/*
+      - Dockerfile
+      - main.go
+      - go.*
+      - Makefile
+      - .github/workflows/build.yaml
+  pull_request:
+    branches: [ "master" ]
+    paths:
+      - auth0/**/*
+      - db/**/*
+      - handlers/**/*
+      - model/**/*
+      - oauth2/**/*
+      - security/**/*
+      - Dockerfile
+      - main.go
+      - go.*
+      - Makefile
+      - .github/workflows/build.yaml
+jobs:
+  ci:
+    env:
+      VERSION: 0.0.1
+      REGISTRY: simplyphotons/fyp
+      BUILD_NUMBER: ${{ github.run_number }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Prepare IMAGE_TAG
+        run: |
+          echo "IMAGE_TAG=$VERSION.$(($BUILD_NUMBER + 107))" >> $GITHUB_ENV
+          IFS='.' read -ra PARTS <<< "$VERSION"
+          echo "TAG_1=${PARTS[0]}" >> $GITHUB_ENV
+          echo "TAG_2=${PARTS[0]}.${PARTS[1]}" >> $GITHUB_ENV
+          echo "TAG_3=${PARTS[0]}.${PARTS[1]}.${PARTS[2]}" >> $GITHUB_ENV
+
+      - name: Login to Docker Hub
+        id: hub-docker-login
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build docker image
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          DOCKER_BUILDKIT=1 docker build --progress=plain --no-cache -t $REGISTRY:$IMAGE_TAG .
+
+      - name: Scan docker image
+        id: scan-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          wget https://raw.githubusercontent.com/anchore/grype/main/install.sh
+          chmod 755 install.sh
+          ./install.sh
+          mv bin/grype /usr/local/bin/
+          GRYPE_MATCH_GOLANG_USING_CPES=false /usr/local/bin/grype $REGISTRY:$IMAGE_TAG -f high --only-fixed
+
+      - name: Build, tag, and push image to Amazon ECR
+        id: push-image
+        if: github.ref == 'refs/heads/master'
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker tag $REGISTRY:$IMAGE_TAG $REGISTRY
+          docker push $REGISTRY:$IMAGE_TAG
+          docker push $REGISTRY
+          echo "::set-output name=image::$REGISTRY:$IMAGE_TAG"

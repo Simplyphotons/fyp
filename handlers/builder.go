@@ -11,7 +11,6 @@ type DBClient interface {
 	GetGanttItem(ctx context.Context, milestoneIdentifier string) ([]model.Gantt, error)
 	CreateProject(ctx context.Context, project db.Application, supervisor_id string) error
 	CreateApplication(ctx context.Context, application db.Application, student_id string) error
-	AcceptApplication(ctx context.Context, application db.Application) error
 	DeclineApplication(ctx context.Context, application db.Application) error
 	GetQuestions(ctx context.Context) ([]model.Question, error)
 	GetSupervisors(ctx context.Context) ([]model.UserData, error)
@@ -30,6 +29,7 @@ type DBClient interface {
 	CreateGanttItem(ctx context.Context, gantt db.Gantt) error
 	UpdateFeedback(ctx context.Context, ganttID string, feedback string) error
 	DeleteGanttItem(id string) error
+	GetAllAcceptedRequests(ctx context.Context) ([]model.ApplicationData, error)
 	CreateSupervisorUser(ctx context.Context, user db.User) error
 	CreateStudentUser(ctx context.Context, user db.User) error
 	CompleteGanttItem(ctx context.Context, gantt db.Gantt) error
