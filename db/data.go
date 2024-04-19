@@ -32,6 +32,7 @@ type Gantt struct {
 	Description string
 	Links       string
 	Feedback    string
+	newFeedBack string
 }
 
 type Question struct {

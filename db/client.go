@@ -8,7 +8,6 @@ import (
 	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"log"
-	"strings"
 )
 
 func (db Client) GetQuestions(ctx context.Context) ([]model.Question, error) {
@@ -669,13 +668,21 @@ func (db Client) CreateGanttItem(ctx context.Context, gantt Gantt) error {
 	return nil
 }
 
-func (db Client) UpdateFeedback(ctx context.Context, ganttID string, feedback string) error {
+func (db Client) UpdateFeedback(ctx context.Context, ganttID string, gantt Gantt) error {
+	newText := ""
 	updateQuery := "UPDATE gantt_Items SET feedback = $1 WHERE item_id = $2"
+	isSupervisor, err := db.getAccountStatus(ctx, ganttID)
+	if err != nil {
+		log.Printf("failed to retrieve account status")
+		return err
+	}
+	if isSupervisor {
+		newText = gantt.Feedback + "Supervisor: " + gantt.newFeedBack + "\n\n"
+	} else {
+		newText = gantt.Feedback + "Student: " + gantt.newFeedBack + "\n\n"
+	}
 
-	feedback = strings.Replace(feedback, "%20", " ", -1)
-	println(feedback)
-
-	result, err := db.conn.Exec(updateQuery, feedback, ganttID)
+	result, err := db.conn.Exec(updateQuery, newText, ganttID)
 	if err != nil {
 		log.Printf("failed to update feedback")
 		return err
@@ -684,6 +691,18 @@ func (db Client) UpdateFeedback(ctx context.Context, ganttID string, feedback st
 	log.Printf("created %d row.\nFeedback updated", rowsAffected)
 	return nil
 
+}
+
+func (db Client) getAccountStatus(ctx context.Context, id string) (bool, error) {
+	updateQuery := "SELECT is_supervisor FROM users WHERE id = $1"
+	row, err := db.conn.QueryContext(ctx, updateQuery, id)
+	if err != nil {
+		log.Printf("failed to read the database for user's supervisor status")
+		return false, err
+	}
+	var result bool
+	err = row.Scan(&result)
+	return result, nil
 }
 
 func (db Client) GetUsername(ctx context.Context, userId string) (string, error) {

@@ -127,7 +127,6 @@ func (c Controller) AddFeedbackHandler(ctx *fiber.Ctx) error {
 	// Read the request body
 	var gantt model.Gantt
 
-	feedback := ctx.Params("feedback")
 	id := ctx.Params("id")
 	err := json.Unmarshal(ctx.Body(), &gantt)
 	if err != nil {
@@ -139,8 +138,11 @@ func (c Controller) AddFeedbackHandler(ctx *fiber.Ctx) error {
 
 	// Translate it to the db request
 
-	// Execute db request
-	err = c.dbClient.UpdateFeedback(ctx.Context(), id, feedback)
+	ganttRequest := db.Gantt{
+		Feedback: gantt.Feedback,
+	}
+
+	err = c.dbClient.UpdateFeedback(ctx.Context(), id, ganttRequest)
 	if err != nil {
 		message := model.ErrorMessage{
 			Message: err.Error(),

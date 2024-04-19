@@ -148,7 +148,7 @@ func main() {
 	app.Patch("/declineApplication", controller.DeclineApplicationHandler) //patch declineapplication
 	app.Patch("/completeGanttItem", controller.CompleteGanttItemHandler)
 	app.Post("/createGanttItem", controller.CreateGanttItemHandler) //creates Gantt item in db
-	app.Patch("/updateFeedback/:id/:feedback", controller.AddFeedbackHandler)
+	app.Patch("/updateFeedback/:id ", controller.AddFeedbackHandler)
 	app.Post("/createStudentUser", controller.CreateStudentHandler)
 	app.Delete("/deleteGanttItem/:id", controller.DeleteGanttItemHandler)
 	app.Listen(":3000")

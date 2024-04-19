@@ -38,6 +38,7 @@ type Gantt struct {
 	Description string `json:"description"`
 	Links       string `json:"links"`
 	Feedback    string `json:"feedback"`
+	newFeedback string `json:"newFeedback"`
 	Colour      string `json:"colour"`
 }
 
