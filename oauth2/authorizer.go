@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/Simplyphotons/fyp.git/security"
 	"github.com/gofiber/fiber/v2"
+	"log/slog"
 )
 
 // New creates a new instance of the OAuth2 authorization middleware
@@ -17,9 +18,11 @@ func New(config *Config) fiber.Handler {
 		}
 
 		// Try to find if the requested endpoint has the authorization scopes configured
-		pathRequestMatcher := config.requestMatcher[c.OriginalURL()]
+		slog.Debug("trying to find a request path match", "original_url", c.OriginalURL(), "route", c.Route().Path)
+		pathRequestMatcher := config.requestMatcher[c.Route().Path]
 
 		if pathRequestMatcher == nil {
+			slog.Debug("No authorization")
 			// If not, respond, depending on the middleware configuration if it allows unmatched endpoints
 			// When it is configured to allow Unmatched endpoints, if middleware does not find configuration for
 			// the endpoint in question, it will allow it to get handled. I.e. it means that all non-configured endpoints

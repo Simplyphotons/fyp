@@ -27,8 +27,10 @@ type DBClient interface {
 	NewAnswer(ctx context.Context) error
 	GetGantt(ctx context.Context, projectIdentifier string) ([]model.GanttChartRow, error)
 	CreateGanttItem(ctx context.Context, gantt db.Gantt) error
-	UpdateFeedback(ctx context.Context, ganttID string, gantt db.Gantt) error
+	UpdateFeedback(ctx context.Context, gantt db.Gantt, userID string) error
+	DisableAlert(ctx context.Context, userID string, ganttID string) error
 	DeleteGanttItem(id string) error
+	AddSecondReader(readerID string, projectID string) error
 	GetAllAcceptedRequests(ctx context.Context) ([]model.ApplicationData, error)
 	CreateSupervisorUser(ctx context.Context, user db.User) error
 	CreateStudentUser(ctx context.Context, user db.User) error

@@ -367,6 +367,36 @@ func (db Client) GetProjects(ctx context.Context, supervisor_id string) ([]model
 
 }
 
+func (db Client) GetSecondProjects(ctx context.Context, supervisor_id string) ([]model.ProjectData, error) {
+	rows, err := db.conn.QueryContext(ctx, "SELECT project_id, project_name, student_id, supervisor_id from projects where second_reader_id = $1", supervisor_id)
+	if err != nil {
+		log.Printf("cannot execute query to get projects: %v", err)
+		return nil, err
+	}
+	result := []model.ProjectData{}
+	var (
+		projectID    string
+		projectName  string
+		studentID    string
+		supervisorID string
+	)
+	for rows.Next() {
+		err = rows.Scan(&projectID, &projectName, &studentID, &supervisorID)
+		if err != nil {
+			log.Printf("cannot read data while getting questions: %v", err)
+		}
+
+		result = append(result, model.ProjectData{
+			ID:           projectID,
+			Name:         projectName,
+			StudentID:    studentID,
+			SupervisorID: supervisorID,
+		})
+	}
+	return result, nil
+
+}
+
 func (db Client) GetProjectID(ctx context.Context, userID string) (*model.ProjectData, error) {
 	rows, err := db.conn.QueryContext(ctx, "select project_id from projects where student_id = $1", userID)
 	if err != nil {
@@ -655,10 +685,11 @@ func (db Client) CreateGanttItem(ctx context.Context, gantt Gantt) error {
 	links := gantt.Links
 	ganttName := gantt.GanttName
 	colour := "#2A9D39"
+	tracker := 0
 
-	updateQuery := "INSERT INTO gantt_Items (item_id, project_id, description, start_date, end_date, feedback, links, gantt_name, colour) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"
+	updateQuery := "INSERT INTO gantt_Items (item_id, project_id, description, start_date, end_date, feedback, links, gantt_name, colour, feedback_update_tracker) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"
 
-	result, err := db.conn.Exec(updateQuery, id, projectID, description, startDate, endDate, feedback, links, ganttName, colour)
+	result, err := db.conn.Exec(updateQuery, id, projectID, description, startDate, endDate, feedback, links, ganttName, colour, tracker)
 	if err != nil {
 		log.Printf("failed to create new gantt item/milestone to the project")
 		return err
@@ -668,21 +699,23 @@ func (db Client) CreateGanttItem(ctx context.Context, gantt Gantt) error {
 	return nil
 }
 
-func (db Client) UpdateFeedback(ctx context.Context, ganttID string, gantt Gantt) error {
+func (db Client) UpdateFeedback(ctx context.Context, gantt Gantt, userID string) error {
 	newText := ""
-	updateQuery := "UPDATE gantt_Items SET feedback = $1 WHERE item_id = $2"
-	isSupervisor, err := db.getAccountStatus(ctx, ganttID)
+	updateQuery := "UPDATE gantt_items SET feedback = $1 WHERE item_id = $2"
+	isSupervisor, err := db.getAccountStatus(ctx, userID)
 	if err != nil {
 		log.Printf("failed to retrieve account status")
 		return err
 	}
 	if isSupervisor {
-		newText = gantt.Feedback + "Supervisor: " + gantt.newFeedBack + "\n\n"
+		newText = gantt.Feedback + "Supervisor: " + gantt.NewFeedBack + "\n\n"
+		db.enableAlert(1, gantt.Id)
 	} else {
-		newText = gantt.Feedback + "Student: " + gantt.newFeedBack + "\n\n"
+		newText = gantt.Feedback + "Student: " + gantt.NewFeedBack + "\n\n"
+		db.enableAlert(2, gantt.Id)
 	}
 
-	result, err := db.conn.Exec(updateQuery, newText, ganttID)
+	result, err := db.conn.Exec(updateQuery, newText, gantt.Id)
 	if err != nil {
 		log.Printf("failed to update feedback")
 		return err
@@ -693,16 +726,93 @@ func (db Client) UpdateFeedback(ctx context.Context, ganttID string, gantt Gantt
 
 }
 
-func (db Client) getAccountStatus(ctx context.Context, id string) (bool, error) {
-	updateQuery := "SELECT is_supervisor FROM users WHERE id = $1"
-	row, err := db.conn.QueryContext(ctx, updateQuery, id)
+func (db Client) enableAlert(number int, itemID string) error {
+	alert, err := db.conn.Exec("UPDATE gantt_items SET feedback_update_tracker = $1, colour = '#e6e600' WHERE item_id = $2", number, itemID)
 	if err != nil {
-		log.Printf("failed to read the database for user's supervisor status")
+		log.Printf("failed to update feedback status and colour")
+		return err
+	}
+	rowsAffected, _ := alert.RowsAffected()
+	log.Printf("created %d row.\nFeedback status and alert colour updated", rowsAffected)
+	return nil
+}
+
+func (db Client) DisableAlert(ctx context.Context, userID string, ganttID string) error {
+	isSupervisor, err := db.getAccountStatus(ctx, userID)
+	if err != nil {
+		log.Printf("failed to retrieve account status")
+		return err
+	}
+	if isSupervisor {
+		row := db.conn.QueryRowContext(ctx, "SELECT feedback_update_tracker FROM gantt_items WHERE item_id = $1", ganttID)
+		var val int
+		err := row.Scan(&val)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return fmt.Errorf("user with ID %s not found", ganttID)
+			}
+			// Handle other errors
+			log.Printf("cannot read data while getting alert: %v", err)
+			return err
+		}
+		if val == 2 {
+			alert, err := db.conn.Exec("UPDATE gantt_items SET feedback_update_tracker = 0, colour = '#2A9D39' WHERE item_id = $1", ganttID)
+			if err != nil {
+				log.Printf("failed to update feedback status and colour")
+				return err
+			}
+			rowsAffected, _ := alert.RowsAffected()
+			log.Printf("created %d row.\nFeedback status and alert colour updated", rowsAffected)
+			return nil
+		} else {
+			log.Printf("failed to remove alert as account is type supervisor when should be type student")
+			return nil
+		}
+	} else {
+
+		row := db.conn.QueryRowContext(ctx, "SELECT feedback_update_tracker FROM gantt_items WHERE item_id = $1", ganttID)
+		var val int
+		err := row.Scan(&val)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return fmt.Errorf("user with ID %s not found", ganttID)
+			}
+			// Handle other errors
+			log.Printf("cannot read data while getting alert: %v", err)
+			return err
+		}
+
+		if val == 1 {
+			alert, err := db.conn.Exec("UPDATE gantt_items SET feedback_update_tracker = 0, colour = '#2A9D39' WHERE item_id = $1", ganttID)
+			if err != nil {
+				log.Printf("failed to update feedback status and colour")
+				return err
+			}
+			rowsAffected, _ := alert.RowsAffected()
+			log.Printf("created %d row.\nFeedback status and alert colour updated", rowsAffected)
+			return nil
+		} else {
+			log.Printf("failed to remove alert as account is type student when should be type supervisor")
+			return nil
+		}
+	}
+
+}
+
+func (db Client) getAccountStatus(ctx context.Context, id string) (bool, error) {
+
+	row := db.conn.QueryRowContext(ctx, "SELECT is_supervisor FROM users WHERE id = $1", id)
+
+	var is_supervisor bool
+	err := row.Scan(&is_supervisor)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return false, fmt.Errorf("user with ID %s not found", id)
+		}
+		log.Printf("cannot read data while getting account status: %v", err)
 		return false, err
 	}
-	var result bool
-	err = row.Scan(&result)
-	return result, nil
+	return is_supervisor, nil
 }
 
 func (db Client) GetUsername(ctx context.Context, userId string) (string, error) {
@@ -760,6 +870,22 @@ func (db Client) updateUser(student_id string) error {
 	updateQuery := "UPDATE users SET has_project = $1 WHERE id = $2"
 
 	result, err := db.conn.Exec(updateQuery, true, student_id)
+	if err != nil {
+		log.Printf("failed to accept application")
+		return err
+	}
+	rowsAffected, _ := result.RowsAffected()
+	log.Printf("created %d row.\n", rowsAffected)
+
+	return nil
+
+}
+
+func (db Client) AddSecondReader(readerID string, projectID string) error {
+
+	updateQuery := "UPDATE projects SET second_reader_id = $1 WHERE id = $2"
+
+	result, err := db.conn.Exec(updateQuery, readerID, projectID)
 	if err != nil {
 		log.Printf("failed to accept application")
 		return err

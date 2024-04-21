@@ -138,6 +138,31 @@ func (c Controller) GetProjectsHandler(ctx *fiber.Ctx) error { //get all project
 	return ctx.Status(200).JSON(response)
 }
 
+func (c Controller) AddSecondReader(ctx *fiber.Ctx) error {
+	id := ctx.Params("id")
+
+	var (
+		authority security.Authority
+		ok        bool
+	)
+	if authority, ok = ctx.UserContext().Value(security.AuthorityKey{}).(security.Authority); !ok {
+		message := model.ErrorMessage{
+			Message: "cannot extract user id",
+		}
+
+		return ctx.Status(401).JSON(message)
+	}
+
+	err := c.dbClient.AddSecondReader(authority.UserID, id)
+	if err != nil {
+		message := model.ErrorMessage{
+			Message: err.Error(),
+		}
+		return ctx.Status(500).JSON(message)
+	}
+	return ctx.Status(200).JSON("successful added second reader")
+}
+
 func (c Controller) GetProjectIDHandler(ctx *fiber.Ctx) error { //get all projects
 
 	var (

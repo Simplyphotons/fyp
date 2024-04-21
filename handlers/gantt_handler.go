@@ -127,7 +127,18 @@ func (c Controller) AddFeedbackHandler(ctx *fiber.Ctx) error {
 	// Read the request body
 	var gantt model.Gantt
 
-	id := ctx.Params("id")
+	var (
+		authority security.Authority
+		ok        bool
+	)
+	if authority, ok = ctx.UserContext().Value(security.AuthorityKey{}).(security.Authority); !ok {
+		message := model.ErrorMessage{
+			Message: "cannot extract user id",
+		}
+
+		return ctx.Status(401).JSON(message)
+	}
+
 	err := json.Unmarshal(ctx.Body(), &gantt)
 	if err != nil {
 		message := model.ErrorMessage{
@@ -139,10 +150,39 @@ func (c Controller) AddFeedbackHandler(ctx *fiber.Ctx) error {
 	// Translate it to the db request
 
 	ganttRequest := db.Gantt{
-		Feedback: gantt.Feedback,
+		Id:          gantt.ID,
+		Feedback:    gantt.Feedback,
+		NewFeedBack: gantt.NewFeedback,
 	}
 
-	err = c.dbClient.UpdateFeedback(ctx.Context(), id, ganttRequest)
+	err = c.dbClient.UpdateFeedback(ctx.Context(), ganttRequest, authority.UserID)
+	if err != nil {
+		message := model.ErrorMessage{
+			Message: err.Error(),
+		}
+		return ctx.Status(500).JSON(message)
+	}
+
+	return ctx.SendStatus(204)
+}
+
+func (c Controller) DisableAlertHandler(ctx *fiber.Ctx) error {
+
+	id := ctx.Params("id")
+
+	var (
+		authority security.Authority
+		ok        bool
+	)
+	if authority, ok = ctx.UserContext().Value(security.AuthorityKey{}).(security.Authority); !ok {
+		message := model.ErrorMessage{
+			Message: "cannot extract user id",
+		}
+
+		return ctx.Status(401).JSON(message)
+	}
+
+	err := c.dbClient.DisableAlert(ctx.Context(), authority.UserID, id)
 	if err != nil {
 		message := model.ErrorMessage{
 			Message: err.Error(),
