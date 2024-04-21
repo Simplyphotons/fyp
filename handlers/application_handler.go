@@ -138,7 +138,33 @@ func (c Controller) GetProjectsHandler(ctx *fiber.Ctx) error { //get all project
 	return ctx.Status(200).JSON(response)
 }
 
-func (c Controller) AddSecondReader(ctx *fiber.Ctx) error {
+func (c Controller) GetSecondProjectsHandler(ctx *fiber.Ctx) error { //get all projects
+
+	var (
+		authority security.Authority
+		ok        bool
+	)
+	if authority, ok = ctx.UserContext().Value(security.AuthorityKey{}).(security.Authority); !ok {
+		message := model.ErrorMessage{
+			Message: "cannot extract user id",
+		}
+
+		return ctx.Status(401).JSON(message)
+	}
+
+	fmt.Printf("%s\n", authority.UserID)
+
+	response, err := c.dbClient.GetSecondProjects(ctx.Context(), authority.UserID)
+	if err != nil {
+		message := model.ErrorMessage{
+			Message: err.Error(),
+		}
+		return ctx.Status(500).JSON(message)
+	}
+	return ctx.Status(200).JSON(response)
+}
+
+func (c Controller) AddSecondReaderHandler(ctx *fiber.Ctx) error {
 	id := ctx.Params("id")
 
 	var (
@@ -153,7 +179,7 @@ func (c Controller) AddSecondReader(ctx *fiber.Ctx) error {
 		return ctx.Status(401).JSON(message)
 	}
 
-	err := c.dbClient.AddSecondReader(authority.UserID, id)
+	err := c.dbClient.AddSecondReader(ctx.Context(), authority.UserID, id)
 	if err != nil {
 		message := model.ErrorMessage{
 			Message: err.Error(),
@@ -192,6 +218,30 @@ func (c Controller) GetProjectIDHandler(ctx *fiber.Ctx) error { //get all projec
 func (c Controller) GetProjectNameHandler(ctx *fiber.Ctx) error { //get all projects
 
 	response, err := c.dbClient.GetProjectName(ctx.Context(), ctx.Params("id"))
+	if err != nil {
+		message := model.ErrorMessage{
+			Message: err.Error(),
+		}
+		return ctx.Status(500).JSON(message)
+	}
+	return ctx.Status(200).JSON(response)
+}
+
+func (c Controller) GetSecondReaderStatusHandler(ctx *fiber.Ctx) error { //get all projects
+
+	var (
+		authority security.Authority
+		ok        bool
+	)
+	if authority, ok = ctx.UserContext().Value(security.AuthorityKey{}).(security.Authority); !ok {
+		message := model.ErrorMessage{
+			Message: "cannot extract user id",
+		}
+
+		return ctx.Status(401).JSON(message)
+	}
+
+	response, err := c.dbClient.GetSecondReaderStatus(ctx.Context(), ctx.Params("id"), authority.UserID)
 	if err != nil {
 		message := model.ErrorMessage{
 			Message: err.Error(),

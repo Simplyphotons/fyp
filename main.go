@@ -94,45 +94,14 @@ func main() {
 
 	controller := handlers.New(dbClient, auth0Client, supervisorRoleID) //dependency injection
 
-	// Initialize oauth2 middleware
-	//oauth2Config, err := oauth2.Build(
-	//	oauth2.Debug(debug),
-	//	oauth2.URL(os.Getenv("JWKS_URL")),
-	//	oauth2.Unmatched(true),
-	//	oauth2.Audience(os.Getenv("AUDIENCE")),
-	//	oauth2.Issuer(os.Getenv("ISSUER")),
-	//	oauth2.HTTPClient(&http.Client{}),
-	//	oauth2.Request("GET", "/questions", []string{"read:questions"}),
-	//	oauth2.Request("POST", "/createApplication", []string{"read:student"}),
-	//	oauth2.Request("POST", "/newQuestion", []string{"read:student"}),
-	//	oauth2.Request("POST", "/newAnswer", []string{"read:supervisor"}),
-	//	oauth2.Request("GET", "/getQuestions", []string{"read:supervisor", "read:student"}),
-	//	oauth2.Request("GET", "/getApplications", []string{"read:supervisor", "read:student"}),
-	//	oauth2.Request("GET", "/GetAllAcceptedRequests", []string{"read:supervisor", "read:student"}),
-	//	oauth2.Request("GET", "/getApplicationsForStudent", []string{"read:student"}),
-	//	oauth2.Request("GET", "/getSpecificApplications", []string{"read:supervisor", "read:student"}),
-	//	oauth2.Request("GET", "/getGanttItem/:id", []string{"read:supervisor", "read:student"}),
-	//	oauth2.Request("GET", "/getGantt/:id", []string{"read:supervisor", "read:student"}),
-	//	oauth2.Request("GET", "/getSupervisors", []string{"read:student"}),
-	//	oauth2.Request("GET", "/getProjects", []string{"read:student", "read:supervisor"}),
-	//	oauth2.Request("GET", "/getUsername/:id", []string{"read:student", "read:supervisor"}),
-	//	oauth2.Request("GET", "/getProjectID", []string{"read:student"}),
-	//	oauth2.Request("GET", "/getProjectStatus", []string{"read:student"}),
-	//	oauth2.Request("GET", "/getProjectName/:id", []string{"read:student", "read:supervisor"}),
-	//	oauth2.Request("GET", "/getGantt/:id", []string{"read:student", "read:supervisor"}),
-	//	oauth2.Request("GET", "/verify", []string{"read:student"}),
-	//	oauth2.Request("POST", "/createProject", []string{"read:supervisor", "read:student"}),
-	//	oauth2.Request("POST", "/createApplication", []string{"read:student"}),
-	//	oauth2.Request("PATCH", "/acceptApplication", []string{"read:supervisor"}),
-	//	oauth2.Request("PATCH", "/declineApplication", []string{"read:supervisor"}),
-	//	oauth2.Request("PATCH", "/disableAlert/:id", []string{"read:supervisor", "read:student"}),
-	//	oauth2.Request("POST", "/createGanttItem", []string{"read:supervisor", "read:student"}),
-	//	oauth2.Request("PATCH", "/updateFeedback", []string{"read:student", "read:supervisor"}),
-	//	oauth2.Request("DELETE", "/deleteGanttItem/:id", []string{"read:supervisor", "read:student"}),
-	//	oauth2.Request("POST", "/createSupervisorUser", []string{"read:admin"}),
-	//	oauth2.Request("POST", "/createStudentUser", []string{"read:student"}),
-	//	oauth2.Request("POST", "/completeGanttItem", []string{"read:student"}),
-	//)
+	//Initialize oauth2 middleware
+	oauth2Config, err := oauth2.Build(
+		oauth2.Debug(debug),
+		oauth2.URL(os.Getenv("JWKS_URL")),
+		oauth2.Unmatched(true),
+		oauth2.Audience(os.Getenv("AUDIENCE")),
+		oauth2.Issuer(os.Getenv("ISSUER")),
+		oauth2.HTTPClient(&http.Client{}))
 	if err != nil {
 		log.Printf("cannot create OAuth2 middleware: %v", err)
 		os.Exit(2)
@@ -145,56 +114,40 @@ func main() {
 		AllowHeaders: allowHeaders,
 	}))
 
-	//app.Use(oauth2.New(oauth2Config))
-
 	app.Post("/authorize", controller.AuthorizeHandler)
-	app.Patch("/disableAlert/:id", MustGetOAuth2Handler("PATCH", "/disableAlert/:id", []string{"read:supervisor", "read:student"}, debug), controller.DisableAlertHandler)
+	app.Patch("/disableAlert/:id", oauth2Config.Authorize([]string{"read:supervisor", "read:student"}), controller.DisableAlertHandler)
 
-	app.Post("/newQuestion", MustGetOAuth2Handler("POST", "/newQuestion", []string{"read:student"}, debug), controller.NewQuestion)              //creates new question
-	app.Post("/newAnswer", MustGetOAuth2Handler("POST", "/newAnswer", []string{"read:supervisor", "read:student"}, debug), controller.NewAnswer) //creates new answer for particular question and adds to db
-	app.Get("/getQuestions", MustGetOAuth2Handler("GET", "/getQuestions", []string{"read:supervisor", "read:student"}, debug), controller.GetQuestionsHandler)
+	app.Post("/newQuestion", oauth2Config.Authorize([]string{"read:student"}), controller.NewQuestion)                //creates new question
+	app.Post("/newAnswer", oauth2Config.Authorize([]string{"read:supervisor", "read:student"}), controller.NewAnswer) //creates new answer for particular question and adds to db
+	app.Get("/getQuestions", oauth2Config.Authorize([]string{"read:supervisor", "read:student"}), controller.GetQuestionsHandler)
 	//app.Get("/isSupervisor", controller.GetSupervisorHandler)
-	app.Get("/getApplications", MustGetOAuth2Handler("GET", "/getApplications", []string{"read:supervisor", "read:student"}, debug), controller.GetApplicationsHandler)                                 //retrieves all applications from db
-	app.Get("/getApplicationsForStudent", MustGetOAuth2Handler("POST", "/getApplicationsForStudent", []string{"read:student"}, debug), controller.GetApplicationsForStudentHandler)                     //retrieves all applications from db
-	app.Get("/getAllAcceptedRequests", MustGetOAuth2Handler("GET", "/getAllAcceptedRequests", []string{"read:supervisor", "read:student"}, debug), controller.GetAllAcceptedRequestsHandler)            //retrieves all applications from db
-	app.Get("/getSpecificApplications/:id", MustGetOAuth2Handler("GET", "/getSpecificApplications/:id", []string{"read:supervisor", "read:student"}, debug), controller.GetSpecificApplicationsHandler) //retrieves one specific applications
-	app.Get("/getGanttItem/:id", MustGetOAuth2Handler("GET", "/getGanttItem/:id", []string{"read:supervisor", "read:student"}, debug), controller.GetGanttItem)
-	app.Get("/getGantt/:id", MustGetOAuth2Handler("GET", "/getGantt/:id", []string{"read:supervisor", "read:student"}, debug), controller.GetGantt)
-	app.Get("/getSupervisors", MustGetOAuth2Handler("GET", "/getSupervisors", []string{"read:supervisor", "read:student"}, debug), controller.GetSupervisorHandler)
-	app.Get("/getProjectStatus", MustGetOAuth2Handler("GET", "/getProjectStatus", []string{"read:supervisor", "read:student"}, debug), controller.GetHasProjectStatusHandler)
-	app.Get("/getProjects", MustGetOAuth2Handler("GET", "/getProjects", []string{"read:supervisor", "read:student"}, debug), controller.GetProjectsHandler)
-	app.Get("/getProjectID", MustGetOAuth2Handler("GET", "/getProjectID", []string{"read:supervisor", "read:student"}, debug), controller.GetProjectIDHandler)
-	app.Get("/getFeedback/:id", MustGetOAuth2Handler("GET", "/getFeedback/:id", []string{"read:supervisor", "read:student"}, debug), controller.GetFeedback)
-	app.Get("/getProjectName/:id", MustGetOAuth2Handler("GET", "/getProjectName/:id", []string{"read:supervisor", "read:student"}, debug), controller.GetProjectNameHandler)
-	app.Get("/getUsername/:id", MustGetOAuth2Handler("GET", "/getUsername/:id", []string{"read:supervisor", "read:student"}, debug), controller.GetUsernameHandler)
-	app.Get("/verify", MustGetOAuth2Handler("GET", "/verify", []string{"read:supervisor", "read:student"}, debug), controller.VerifyHandler)
-	app.Post("/createProject", MustGetOAuth2Handler("POST", "/createProject", []string{"read:supervisor", "read:student"}, debug), controller.CreateProjectHandler)             //post createproject
-	app.Post("/createApplication", MustGetOAuth2Handler("POST", "/createApplication", []string{"read:supervisor", "read:student"}, debug), controller.CreateApplicationHandler) //post createapplication
-	app.Post("/createSupervisorUser", MustGetOAuth2Handler("POST", "/createSupervisorUser", []string{"read:supervisor", "read:student"}, debug), controller.CreateSupervisorHandler)
+	app.Get("/getApplications", oauth2Config.Authorize([]string{"read:supervisor", "read:student"}), controller.GetApplicationsHandler)                     //retrieves all applications from db
+	app.Get("/getApplicationsForStudent", oauth2Config.Authorize([]string{"read:student"}), controller.GetApplicationsForStudentHandler)                    //retrieves all applications from db
+	app.Get("/getAllAcceptedRequests", oauth2Config.Authorize([]string{"read:supervisor", "read:student"}), controller.GetAllAcceptedRequestsHandler)       //retrieves all applications from db
+	app.Get("/getSpecificApplications/:id", oauth2Config.Authorize([]string{"read:supervisor", "read:student"}), controller.GetSpecificApplicationsHandler) //retrieves one specific applications
+	app.Get("/getGanttItem/:id", oauth2Config.Authorize([]string{"read:supervisor", "read:student"}), controller.GetGanttItem)
+	app.Get("/getGantt/:id", oauth2Config.Authorize([]string{"read:supervisor", "read:student"}), controller.GetGantt)
+	app.Get("/getSupervisors", oauth2Config.Authorize([]string{"read:supervisor", "read:student"}), controller.GetSupervisorHandler)
+	app.Get("/getProjectStatus", oauth2Config.Authorize([]string{"read:supervisor", "read:student"}), controller.GetHasProjectStatusHandler)
+	app.Get("/getProjects", oauth2Config.Authorize([]string{"read:supervisor", "read:student"}), controller.GetProjectsHandler)
+	app.Get("/getProjectID", oauth2Config.Authorize([]string{"read:supervisor", "read:student"}), controller.GetProjectIDHandler)
+	app.Get("/getFeedback/:id", oauth2Config.Authorize([]string{"read:supervisor", "read:student"}), controller.GetFeedback)
+	app.Get("/getProjectName/:id", oauth2Config.Authorize([]string{"read:supervisor", "read:student"}), controller.GetProjectNameHandler)
+	app.Get("/getUsername/:id", oauth2Config.Authorize([]string{"read:supervisor", "read:student"}), controller.GetUsernameHandler)
+	app.Get("/getSecondProjects", oauth2Config.Authorize([]string{"read:supervisor"}), controller.GetSecondProjectsHandler)
+	app.Get("/getSecondReaderStatus/:id", oauth2Config.Authorize([]string{"read:student", "read:supervisor"}), controller.GetSecondReaderStatusHandler)
+	app.Get("/verify", oauth2Config.Authorize([]string{"read:supervisor", "read:student"}), controller.VerifyHandler)
+	app.Post("/createProject", oauth2Config.Authorize([]string{"read:supervisor", "read:student"}), controller.CreateProjectHandler)         //post createproject
+	app.Post("/createApplication", oauth2Config.Authorize([]string{"read:supervisor", "read:student"}), controller.CreateApplicationHandler) //post createapplication
+	app.Post("/createSupervisorUser", oauth2Config.Authorize([]string{"read:admin"}), controller.CreateSupervisorHandler)
 	//patch acceptapplication
-	app.Patch("/declineApplication", MustGetOAuth2Handler("PATCH", "/declineApplication", []string{"read:supervisor", "read:student"}, debug), controller.DeclineApplicationHandler) //patch declineapplication
-	app.Patch("/addSecondReader/:id", MustGetOAuth2Handler("PATCH", "/addSecondReader/:id", []string{"read:supervisor"}, debug), controller.DeclineApplicationHandler)               //patch declineapplication
-	app.Patch("/completeGanttItem", MustGetOAuth2Handler("PATCH", "/completeGanttItem", []string{"read:supervisor", "read:student"}, debug), controller.CompleteGanttItemHandler)
-	app.Post("/createGanttItem", MustGetOAuth2Handler("POST", "/createGanttItem", []string{"read:supervisor", "read:student"}, debug), controller.CreateGanttItemHandler) //creates Gantt item in db
-	app.Patch("/updateFeedback", MustGetOAuth2Handler("PATCH", "/updateFeedback", []string{"read:supervisor", "read:student"}, debug), controller.AddFeedbackHandler)
-	app.Post("/createStudentUser", MustGetOAuth2Handler("POST", "/createStudentUser", []string{"read:supervisor", "read:student"}, debug), controller.CreateStudentHandler)
-	app.Delete("/deleteGanttItem/:id", MustGetOAuth2Handler("DELETE", "/deleteGanttItem/:id", []string{"read:supervisor", "read:student"}, debug), controller.DeleteGanttItemHandler)
+	app.Patch("/declineApplication", oauth2Config.Authorize([]string{"read:supervisor", "read:student"}), controller.DeclineApplicationHandler) //patch declineapplication
+	app.Patch("/addSecondReader/:id", oauth2Config.Authorize([]string{"read:supervisor"}), controller.AddSecondReaderHandler)                   //patch declineapplication
+	app.Patch("/completeGanttItem", oauth2Config.Authorize([]string{"read:supervisor", "read:student"}), controller.CompleteGanttItemHandler)
+	app.Post("/createGanttItem", oauth2Config.Authorize([]string{"read:supervisor", "read:student"}), controller.CreateGanttItemHandler) //creates Gantt item in db
+	app.Patch("/updateFeedback", oauth2Config.Authorize([]string{"read:supervisor", "read:student"}), controller.AddFeedbackHandler)
+	app.Post("/createStudentUser", oauth2Config.Authorize([]string{"read:supervisor", "read:student"}), controller.CreateStudentHandler)
+	app.Delete("/deleteGanttItem/:id", oauth2Config.Authorize([]string{"read:supervisor", "read:student"}), controller.DeleteGanttItemHandler)
 
 	app.Listen(":3000")
-}
-
-func MustGetOAuth2Handler(method, path string, permissions []string, debug bool) fiber.Handler {
-	oauth2Config, err := oauth2.Build(
-		oauth2.Debug(debug),
-		oauth2.URL(os.Getenv("JWKS_URL")),
-		oauth2.Unmatched(true),
-		oauth2.Audience(os.Getenv("AUDIENCE")),
-		oauth2.Issuer(os.Getenv("ISSUER")),
-		oauth2.HTTPClient(&http.Client{}),
-		oauth2.Request(method, path, permissions))
-
-	if err != nil {
-		log.Fatalf("cannot build OAuth2 middleware: %v", err)
-	}
-	return oauth2.New(oauth2Config)
 }

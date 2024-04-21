@@ -434,6 +434,30 @@ func (db Client) GetProjectName(ctx context.Context, ProjectID string) (*model.P
 	return result, err
 }
 
+func (db Client) GetSecondReaderStatus(ctx context.Context, ProjectID string, userID string) (bool, error) {
+	rows, err := db.conn.QueryContext(ctx, "select second_reader_id from projects where project_id = $1", ProjectID)
+	if err != nil {
+		log.Printf("cannot execute query to get project name: %v", err)
+		return false, err
+	}
+
+	var result string
+	for rows.Next() {
+		err = rows.Scan(&result)
+		if err != nil {
+			log.Printf("cannot read project Name: %v", err)
+			return false, err
+		}
+	}
+	println(result)
+
+	if result == userID {
+		return true, nil
+	}
+
+	return false, nil
+}
+
 func (db Client) GetSpecificApplications(ctx context.Context, appID string) ([]model.ApplicationData, error) {
 	rows, err := db.conn.QueryContext(ctx, "SELECT id, student_id, supervisor_id, heading, description, accepted, declined from applications where id = $1", appID)
 	if err != nil {
@@ -881,9 +905,32 @@ func (db Client) updateUser(student_id string) error {
 
 }
 
-func (db Client) AddSecondReader(readerID string, projectID string) error {
+func (db Client) AddSecondReader(ctx context.Context, readerID string, appID string) error {
 
-	updateQuery := "UPDATE projects SET second_reader_id = $1 WHERE id = $2"
+	query := `SELECT p.project_id
+FROM applications a INNER JOIN projects p
+    ON a.student_id = p.student_id
+WHERE id = $1`
+
+	var projectID string
+	rows, err := db.conn.QueryContext(ctx, query, appID)
+	if err != nil {
+		log.Printf("failed to read application")
+		return err
+	}
+	for rows.Next() {
+		err = rows.Scan(&projectID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return fmt.Errorf("feedback for gantt ID %s not found", projectID)
+			}
+			// Handle other errors
+			log.Printf("cannot read data while getting feedback: %v", err)
+			return err
+		}
+		println("got project id: ", projectID)
+	}
+	updateQuery := "UPDATE projects SET second_reader_id = $1 WHERE project_id = $2"
 
 	result, err := db.conn.Exec(updateQuery, readerID, projectID)
 	if err != nil {

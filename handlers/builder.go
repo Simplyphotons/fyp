@@ -30,10 +30,12 @@ type DBClient interface {
 	UpdateFeedback(ctx context.Context, gantt db.Gantt, userID string) error
 	DisableAlert(ctx context.Context, userID string, ganttID string) error
 	DeleteGanttItem(id string) error
-	AddSecondReader(readerID string, projectID string) error
+	AddSecondReader(ctx context.Context, readerID string, appID string) error
 	GetAllAcceptedRequests(ctx context.Context) ([]model.ApplicationData, error)
 	CreateSupervisorUser(ctx context.Context, user db.User) error
 	CreateStudentUser(ctx context.Context, user db.User) error
+	GetSecondProjects(ctx context.Context, supervisor_id string) ([]model.ProjectData, error)
+	GetSecondReaderStatus(ctx context.Context, ProjectID string, userID string) (bool, error)
 	CompleteGanttItem(ctx context.Context, gantt db.Gantt) error
 	Verify(ctx context.Context, userID string) (*model.Verify, error)
 }
